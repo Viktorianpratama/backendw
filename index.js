@@ -30,6 +30,12 @@ app.use('/api/payments', paymentRoutes(supabase));
 app.use('/api/rooms', roomsRoutes(supabase));
 app.use('/api', notificationRoutes(supabase));
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send('Something broke!');
+});
+
 // Export the Express app as a serverless function
 export default app;
   
