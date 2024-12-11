@@ -6,27 +6,27 @@ import multer from 'multer';
 
 const app = express();
 app.use(cors());
-app.use(express.json());  // Untuk memparse request body (termasuk senderEmail)
+app.use(express.json()); // Untuk memparse request body
 
-const upload = multer({ dest: 'uploads/' });
+// Gunakan /tmp sebagai direktori writable untuk file upload
+const upload = multer({ dest: '/tmp/uploads/' });
 
 const router = express.Router();
 
 export default (supabase) => {
-
   // Fungsi untuk mengirimkan email reminder
   const sendReminderEmail = async (paymentDetails, recipientEmail) => {
     let transporter = nodemailer.createTransport({
-      service: 'gmail', 
+      service: 'gmail',
       auth: {
-        user: 'yohane.e.v.pratama1908@gmail.com', 
-        pass: 'XanderPratama',  
+        user: process.env.EMAIL_USER, // Gunakan variabel environment
+        pass: process.env.EMAIL_PASS, // Jangan hardcode password
       },
     });
 
     const mailOptions = {
-      from: 'yohane.e.v.pratama1908@gmail.com',  
-      to: recipientEmail,   // Gunakan email dari request body atau default ke email admin
+      from: process.env.EMAIL_USER, // Email pengirim
+      to: recipientEmail,
       subject: `Payment Reminder for Room ${paymentDetails.rooms.room_number}`,
       text: `This is a reminder for your payment of ${paymentDetails.amount}. The due date is ${paymentDetails.due_date}. Please make the payment ASAP.`,
     };
@@ -88,7 +88,7 @@ export default (supabase) => {
 
   // Endpoint untuk mengirimkan reminder
   router.post('/reminder/:id', async (req, res) => {
-    const { id } = req.params;  // Menggunakan id yang ada di URL
+    const { id } = req.params;
     const { senderEmail } = req.body;
 
     if (!isUUID(id)) {
@@ -110,8 +110,7 @@ export default (supabase) => {
         return res.status(400).json({ error: 'Payment is already completed or invalid status' });
       }
 
-      // Jika pengirim email ada, gunakan itu, jika tidak, kirim ke email admin
-      const recipientEmail = senderEmail || 'yohane.e.v.pratama1908@gmail.com';
+      const recipientEmail = senderEmail || process.env.EMAIL_USER;
 
       await sendReminderEmail(data, recipientEmail);
 
@@ -122,7 +121,6 @@ export default (supabase) => {
     }
   });
 
-
   // Endpoint untuk mengunggah bukti pembayaran
   router.post('/upload-proof', upload.single('proof'), async (req, res) => {
     try {
@@ -132,7 +130,6 @@ export default (supabase) => {
       }
 
       const filePath = req.file.path;
-      // Simpan filePath ke database (opsional, tergantung kebutuhan Anda)
       const { data, error } = await supabase
         .from('payment_proofs')
         .insert([{ payment_id: paymentId, file_path: filePath }]);
@@ -150,13 +147,12 @@ export default (supabase) => {
   // Endpoint untuk memproses pembayaran
   router.post('/payments', async (req, res) => {
     const { userId, roomId, amount, status, due_date } = req.body;
-  
+
     if (!userId || !roomId || !amount || !status || !due_date) {
       return res.status(400).json({ error: 'All fields are required: userId, roomId, amount, status, and due_date' });
     }
-  
+
     try {
-      // Insert pembayaran baru ke database
       const { data, error } = await supabase
         .from('payments')
         .insert([
@@ -168,17 +164,17 @@ export default (supabase) => {
             due_date: due_date,
           },
         ]);
-  
+
       if (error) {
         return res.status(500).json({ error: 'Error inserting payment data' });
       }
-  
+
       res.status(201).json({ message: 'Payment added successfully', payment: data });
     } catch (error) {
       console.error('Error processing payment:', error);
       res.status(500).json({ error: 'Failed to add payment' });
     }
   });
-  
+
   return router;
 };
